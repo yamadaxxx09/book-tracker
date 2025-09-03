@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`✅ Server on :${PORT}`));
+
 
 app.use(cors());
 app.use(express.json());
@@ -31,6 +33,10 @@ function auth(req, res, next) {
 
 app.get('/', (req, res) => {
   res.send('📚 Book Tracker API is running. Try GET /api/books');
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, env: process.env.NODE_ENV || 'production' });
 });
 
 app.get('/api/books', auth, async (req, res) => {
