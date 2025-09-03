@@ -1,67 +1,99 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import axios from 'axios'
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/books'
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:5000').replace(/\/$/, '');
 
-export const fetchBooks = createAsyncThunk('books/fetchBooks', async (token) => {
-  const res = await axios.get(API_URL, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return res.data
-})
+function authHeaders(getState) {
+  const token = getState().auth.token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
-export const addBook = createAsyncThunk('books/addBook', async ({ book, token }) => {
-  const res = await axios.post(API_URL, book, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return res.data
-})
-
-export const deleteBook = createAsyncThunk('books/deleteBook', async ({ id, token }) => {
-  await axios.delete(`${API_URL}/${id}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return id 
-})
-
-export const updateBook = createAsyncThunk('books/updateBook', async ({ id, updates, token }) => {
-  const res = await axios.put(`${API_URL}/${id}`, updates, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return res.data
-})
-
-const booksSlice = createSlice({
-  name: 'books',
-  initialState: { items: [], status: 'idle', error: null },
-  reducers: {},
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchBooks.pending, (state) => {
-        state.status = 'loading'
-      })
-      .addCase(fetchBooks.fulfilled, (state, action) => {
-        state.status = 'succeeded'
-        state.items = action.payload
-      })
-      .addCase(fetchBooks.rejected, (state, action) => {
-        state.status = 'failed'
-        state.error = action.error.message
-      })
-      .addCase(addBook.fulfilled, (state, action) => {
-        state.items.push(action.payload)
-      })
-      .addCase(deleteBook.fulfilled, (state, action) => {
-        const id = action.payload
-        state.items = state.items.filter(b => b._id !== id)
-      })
-      .addCase(updateBook.fulfilled, (state, action) => {
-        const idx = state.items.findIndex(b => b._id === action.payload._id)
-        if (idx !== -1) {
-          state.items[idx] = action.payload
-        }
-      })
+export const fetchBooks = createAsyncThunk(
+  'books/fetch',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.get(`${API_BASE}/api/books`, {
+        headers: { ...authHeaders(getState) },
+      });
+      return data;
+    } catch (e) {
+      return rejectWithValue(e?.response?.data?.error || 'fetch failed');
+    }
   }
-})
+);
 
-export default booksSlice.reducer
+export const addBook = createAsyncThunk(
+  'books/add',
+  async (payload, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.post(`${API_BASE}/api/books`, payload, {
+        headers: { 'Content-Type': 'application/json', ...authHeaders(getState) },
+      });
+      return data;
+    } catch (e) {
+      return rejectWithValue(e?.response?.data?.error || 'add failed');
+    }
+  }
+);
+
+export const updateBook = createAsyncThunk(
+  'books/update',
+  async ({ id, updates }, { getState, rejectWithValue }) => {
+    try {
+      const { data } = await axios.put(`${API_BASE}/api/books/${id}`, updates, {
+        headers: { 'Content-Type': 'application/json', ...authHeaders(getState) },
+      });
+      return data;
+    } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'update failed';
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const deleteBook = createAsyncThunk(
+  'books/delete',
+  async (id, { getState, rejectWithValue }) => {
+    try {
+      await axios.delete(`${API_BASE}/api/books/${id}`, {
+        headers: { ...authHeaders(getState) },
+      });
+      return id;
+    } catch (e) {
+      return rejectWithValue(e?.response?.data?.error || 'delete failed');
+    }
+  }
+);
+
+const slice = createSlice({
+  name: 'books',
+  initialState: { items: [], loading: false, error: '' },
+  reducers: {},
+  extraReducers: (b) => {
+    b.addCase(fetchBooks.pending,   (s)    => { s.loading = true; s.error = ''; });
+    b.addCase(fetchBooks.fulfilled, (s, a) => { s.loading = false; s.items = a.payload || []; });
+    b.addCase(fetchBooks.rejected,  (s, a) => { s.loading = false; s.error = a.payload || 'fetch failed'; });
+
+    b.addCase(addBook.pending,      (s)    => { s.error = ''; });
+    b.addCase(addBook.fulfilled,    (s, a) => { s.items.unshift(a.payload); });
+    b.addCase(addBook.rejected,     (s, a) => { s.error = a.payload || 'add failed'; });
+
+    b.addCase(updateBook.fulfilled, (s, a) => {
+      const i = s.items.findIndex(x => x._id === a.payload._id);
+      if (i >= 0) s.items[i] = a.payload;
+    });
+    b.addCase(updateBook.rejected,  (s, a) => { s.error = a.payload || 'update failed'; });
+
+    b.addCase(deleteBook.fulfilled, (s, a) => {
+      s.items = s.items.filter(x => x._id !== a.payload);
+    });
+    b.addCase(deleteBook.rejected,  (s, a) => { s.error = a.payload || 'delete failed'; });
+
+    b.addMatcher(
+      (a) => a.type.startsWith('books/') && a.type.endsWith('/pending'),
+      (s) => { s.error = ''; }
+    );
+  },
+});
+
+export default slice.reducer;

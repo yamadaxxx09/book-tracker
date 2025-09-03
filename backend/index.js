@@ -7,11 +7,30 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server on :${PORT}`));
 
+const isLocalhost = (o) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o || '');
+const prodOrigins = [
+  'https://book-tracker-r11c.onrender.com', 
+];
 
-app.use(cors());
+if (!process.env.JWT_SECRET) {
+  console.error('❌ Missing JWT_SECRET');
+  process.exit(1);
+}
+
 app.use(express.json());
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (isLocalhost(origin) || prodOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked: ${origin}`), false);
+  },
+  credentials: false, 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204,
+}));
 
 let booksCol;
 let usersCol;
@@ -32,7 +51,7 @@ function auth(req, res, next) {
 }
 
 app.get('/', (req, res) => {
-  res.send('📚 Book Tracker API is running. Try GET /api/books');
+  res.send(' Book Tracker API is running. Try GET /api/books');
 });
 
 app.get('/api/health', (req, res) => {
@@ -61,7 +80,7 @@ app.post('/api/books', auth, async (req, res) => {
       genre: genre || '',
       rating: rating ?? null,
       notes: notes || '',
-      userId: req.user.userId
+      userId: req.user.userId,
     };
     const r = await booksCol.insertOne(newBook);
     res.status(201).json({ _id: r.insertedId.toString(), ...newBook });
@@ -104,7 +123,6 @@ app.put('/api/books/:id', auth, async (req, res) => {
     res.status(500).json({ error: 'internal server error' });
   }
 });
-
 
 app.delete('/api/books/:id', auth, async (req, res) => {
   try {
@@ -154,7 +172,11 @@ app.post('/api/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
 
-    const token = jwt.sign({ userId: user._id.toString(), username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign(
+      { userId: user._id.toString(), username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
     res.json({ token, user: { _id: user._id.toString(), username: user.username, email: user.email } });
   } catch (e) {
     console.error('login error:', e);
@@ -162,9 +184,13 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-
 async function start() {
-  _client = new MongoClient(process.env.MONGO_URI);
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!mongoUri) {
+    console.error('❌ Missing MONGO_URI / MONGODB_URI');
+    process.exit(1);
+  }
+  _client = new MongoClient(mongoUri);
   await _client.connect();
   const db = _client.db(process.env.DB_NAME || 'booktracker');
   booksCol = db.collection('books');

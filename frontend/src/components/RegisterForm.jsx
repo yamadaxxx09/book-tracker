@@ -1,43 +1,39 @@
-import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { loginUser } from '../features/auth/authSlice';
+import { registerUser } from '../features/auth/authSlice';
 
-export function LoginForm({ onSwitch }) {
+export function RegisterForm({ onSwitch }) {
   const dispatch = useDispatch();
   const loading = useSelector(s => s.auth.loading);
   const error = useSelector(s => s.auth.error);
-  const [localErr, setLocalErr] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setLocalErr('');
     const fd = new FormData(e.currentTarget);
-    const payload = { email: fd.get('email'), password: fd.get('password') };
-    try {
-      await dispatch(loginUser(payload)).unwrap();
-    } catch (e) {
-      setLocalErr(String(e));
-    }
+    const payload = {
+      username: fd.get('username'),
+      email: fd.get('email'),
+      password: fd.get('password'),
+    };
+    await dispatch(registerUser(payload));
   }
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: '24px auto' }}>
-      <h2 className="section-title">Sign in</h2>
+      <h2 className="section-title">Create account</h2>
       <form className="form" onSubmit={handleSubmit}>
+        <input className="input" name="username" placeholder="Username" required />
         <input className="input" name="email" type="email" placeholder="Email" required />
         <input className="input" name="password" type="password" placeholder="Password" required />
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? 'Loading...' : 'Login'}
+        <button className="btn btn-primary" disabled={loading}>
+          {loading ? 'Creating...' : 'Register'}
         </button>
       </form>
-      {(localErr || error) && (
-        <p style={{ color:'crimson', marginTop:8 }}>{localErr || error}</p>
-      )}
+      {error && <p style={{ color: 'crimson', marginTop: 8 }}>{error}</p>}
       <div className="hr" />
       <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-        First time here?{' '}
+        Already have an account?{' '}
         <button type="button" className="btn btn-ghost" onClick={onSwitch}>
-          Register
+          Sign in
         </button>
       </p>
     </div>

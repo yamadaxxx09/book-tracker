@@ -1,42 +1,57 @@
-import { useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { addBook } from '../features/books/booksSlice'
+import { useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { addBook } from '../features/books/booksSlice';
 
-export default function AddBookForm() {
-  const dispatch = useDispatch()
-  const token = useSelector(s => s.auth.token)
-  const [title, setTitle] = useState('')
-  const [author, setAuthor] = useState('')
-  const [genre, setGenre] = useState('')
-  const [rating, setRating] = useState(3)
-  const [notes, setNotes] = useState('')
-  const [err, setErr] = useState('')
+export function AddBookForm() {
+  const dispatch = useDispatch();
+  const [submitting, setSubmitting] = useState(false);
 
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    setErr('')
-    if (!title.trim()) {
-      setErr('Title is required')
-      return
-    }
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      title: fd.get('title')?.trim(),
+      author: fd.get('author') || '',
+      genre: fd.get('genre') || '',
+      rating: fd.get('rating') ? Number(fd.get('rating')) : null,
+      notes: fd.get('notes') || '',
+    };
+
+    if (!payload.title) return;
+
     try {
-      await dispatch(addBook({ book: { title, author, genre, rating: Number(rating), notes }, token })).unwrap()
-      setTitle(''); setAuthor(''); setGenre(''); setRating(3); setNotes('')
-    } catch (e) {
-      setErr(e.message || 'failed to add')
+      setSubmitting(true);
+      const res = await dispatch(addBook(payload));
+      if (res.error) {
+        console.error(res.error);
+      } else {
+        e.currentTarget.reset();
+      }
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8 }}>
-      <h3>Add Book</h3>
-      <input placeholder="Title *" value={title} onChange={e => setTitle(e.target.value)} />
-      <input placeholder="Author" value={author} onChange={e => setAuthor(e.target.value)} />
-      <input placeholder="Genre" value={genre} onChange={e => setGenre(e.target.value)} />
-      <input type="number" min="1" max="5" placeholder="Rating (1-5)" value={rating} onChange={e => setRating(e.target.value)} />
-      <textarea placeholder="Notes" value={notes} onChange={e => setNotes(e.target.value)} />
-      <button type="submit">Add</button>
-      {err && <p style={{ color: 'crimson' }}>{err}</p>}
-    </form>
-  )
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3 className="section-title">Add a Book</h3>
+      <form className="form" onSubmit={handleSubmit}>
+        <input className="input" name="title" placeholder="Title *" required />
+        <input className="input" name="author" placeholder="Author" />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 140px', gap:12 }}>
+          <input className="input" name="genre" placeholder="Genre" />
+          <select className="select" name="rating" defaultValue="">
+            <option value="" disabled>Rating</option>
+            {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <textarea className="textarea" name="notes" rows={3} placeholder="Notes" />
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+          <button className="btn btn-primary" disabled={submitting}>
+            {submitting ? 'Saving...' : 'Add'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
